@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Support package GPG keys
+
 ## 2024-06-24
 
 - The cache is now correctly invalidated if the stack version of an existing cache cannot be determined. ([#133](https://github.com/heroku/heroku-buildpack-apt/pull/133))
