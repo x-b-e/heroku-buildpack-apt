@@ -48,7 +48,6 @@ APT_TRUSTED_DIR="$CACHE_DIR/apt/trusted.gpg.d"
 APT_SOURCES="$APT_SOURCELIST_DIR/sources.list"
 
 EXISTING_TRUSTED_DIR="/etc/apt/trusted.gpg.d"
-
 APT_VERSION=$(apt-get -v | awk 'NR == 1{ print $2 }')
 
 case "$APT_VERSION" in
@@ -100,6 +99,8 @@ APT_OPTIONS="$APT_OPTIONS -o dir::etc::trustedparts=$APT_TRUSTED_DIR"
 topic "Updating apt caches"
 apt-get $APT_OPTIONS update | indent
 
+PACKAGES="$CACHE_DIR/package-list"
+
 for PACKAGE in $(cat $BUILD_DIR/Aptfile | grep -v -s -e '^#' | grep -v -s -e "^:repo:" | grep -v -s -e "^:key:"); do
   if [[ $PACKAGE == *deb ]]; then
     PACKAGE_NAME=$(basename $PACKAGE .deb)
@@ -107,41 +108,61 @@ for PACKAGE in $(cat $BUILD_DIR/Aptfile | grep -v -s -e '^#' | grep -v -s -e "^:
 
     topic "Fetching $PACKAGE"
     curl -s -L -z $PACKAGE_FILE -o $PACKAGE_FILE $PACKAGE 2>&1 | indent
+    echo $PACKAGE_NAME >> $PACKAGES
   else
     topic "Fetching .debs for $PACKAGE"
     apt-get $APT_OPTIONS -y $APT_FORCE_YES -d install --reinstall $PACKAGE | indent
+
+    # Changes the archives location to ensure the package urls are printed.
+    # Nothing is downloaded/updated here so the archive location can be set to anywhere
+    # other than the actual archives location without issue.
+    apt-get $APT_OPTIONS -y $APT_FORCE_YES -o dir::cache::archives=$APT_CACHE_DIR \
+      install --print-uris --reinstall $PACKAGE | \
+      grep ^\' | awk '{print $2}' >> $PACKAGES
   fi
 done
 
-mkdir -p $BUILD_DIR/.apt
+# Removes duplicate file names
+cat $PACKAGES | awk '!seen[$0]++' > "$PACKAGES-clean"
+mv "$PACKAGES-clean" $PACKAGES
+
+# Remove outdated and leftover packages
+topic "Cleaning up outdated and leftover packages"
+find $APT_CACHE_DIR/archives -type f -name "*.deb" | \
+  grep -vFf $PACKAGES | xargs --no-run-if-empty rm
+
+# Remove the packages list file so we have a clean file for subsequent runs
+rm $PACKAGES
+
+mkdir -p $BUILD_DIR/.heroku/apt
 
 for DEB in $(ls -1 $APT_CACHE_DIR/archives/*.deb); do
   topic "Installing $(basename $DEB)"
-  dpkg -x $DEB $BUILD_DIR/.apt/
+  dpkg -x $DEB $BUILD_DIR/.heroku/apt/
 done
 
 topic "Writing profile script"
 mkdir -p $BUILD_DIR/.profile.d
 cat <<EOF >$BUILD_DIR/.profile.d/000_apt.sh
-export PATH="\$HOME/.apt/usr/bin:\$PATH"
-export LD_LIBRARY_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu:\$HOME/.apt/usr/lib/i386-linux-gnu:\$HOME/.apt/usr/lib:\$LD_LIBRARY_PATH"
-export LIBRARY_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu:\$HOME/.apt/usr/lib/i386-linux-gnu:\$HOME/.apt/usr/lib:\$LIBRARY_PATH"
-export INCLUDE_PATH="\$HOME/.apt/usr/include:\$HOME/.apt/usr/include/x86_64-linux-gnu:\$INCLUDE_PATH"
+export PATH="\$HOME/.heroku/apt/bin:\$HOME/.heroku/apt/sbin:\$HOME/.heroku/apt/usr/bin:\$HOME/.heroku/apt/usr/sbin:\$PATH"
+export LD_LIBRARY_PATH="\$HOME/.heroku/apt/lib/x86_64-linux-gnu:\$HOME/.heroku/apt/lib/i386-linux-gnu:\$HOME/.heroku/apt/lib:\$HOME/.heroku/apt/usr/lib/x86_64-linux-gnu:\$HOME/.heroku/apt/usr/lib/i386-linux-gnu:\$HOME/.heroku/apt/usr/lib:\$LD_LIBRARY_PATH"
+export LIBRARY_PATH="\$HOME/.heroku/apt/usr/lib/x86_64-linux-gnu:\$HOME/.heroku/apt/usr/lib/i386-linux-gnu:\$HOME/.heroku/apt/usr/lib:\$LIBRARY_PATH"
+export INCLUDE_PATH="\$HOME/.heroku/apt/usr/include:\$HOME/.heroku/apt/usr/include/x86_64-linux-gnu:\$INCLUDE_PATH"
 export CPATH="\$INCLUDE_PATH"
 export CPPPATH="\$INCLUDE_PATH"
-export PKG_CONFIG_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu/pkgconfig:\$HOME/.apt/usr/lib/i386-linux-gnu/pkgconfig:\$HOME/.apt/usr/lib/pkgconfig:\$PKG_CONFIG_PATH"
+export PKG_CONFIG_PATH="\$HOME/.heroku/apt/usr/lib/x86_64-linux-gnu/pkgconfig:\$HOME/.heroku/apt/usr/lib/i386-linux-gnu/pkgconfig:\$HOME/.heroku/apt/usr/lib/pkgconfig:\$PKG_CONFIG_PATH"
 EOF
 
-export PATH="$BUILD_DIR/.apt/usr/bin:$PATH"
-export LD_LIBRARY_PATH="$BUILD_DIR/.apt/usr/lib/x86_64-linux-gnu:$BUILD_DIR/.apt/usr/lib/i386-linux-gnu:$BUILD_DIR/.apt/usr/lib:$LD_LIBRARY_PATH"
-export LIBRARY_PATH="$BUILD_DIR/.apt/usr/lib/x86_64-linux-gnu:$BUILD_DIR/.apt/usr/lib/i386-linux-gnu:$BUILD_DIR/.apt/usr/lib:$LIBRARY_PATH"
-export INCLUDE_PATH="$BUILD_DIR/.apt/usr/include:$BUILD_DIR/.apt/usr/include/x86_64-linux-gnu:$INCLUDE_PATH"
+export PATH="$BUILD_DIR/.heroku/apt/bin:$BUILD_DIR/.heroku/apt/sbin:$BUILD_DIR/.heroku/apt/usr/bin:$BUILD_DIR/.heroku/apt/usr/sbin:$PATH"
+export LD_LIBRARY_PATH="$BUILD_DIR/.heroku/apt/lib/x86_64-linux-gnu:$BUILD_DIR/.heroku/apt/lib/i386-linux-gnu:$BUILD_DIR/.heroku/apt/lib:$BUILD_DIR/.heroku/apt/usr/lib/x86_64-linux-gnu:$BUILD_DIR/.heroku/apt/usr/lib/i386-linux-gnu:$BUILD_DIR/.heroku/apt/usr/lib:$LD_LIBRARY_PATH"
+export LIBRARY_PATH="$BUILD_DIR/.heroku/apt/usr/lib/x86_64-linux-gnu:$BUILD_DIR/.heroku/apt/usr/lib/i386-linux-gnu:$BUILD_DIR/.heroku/apt/usr/lib:$LIBRARY_PATH"
+export INCLUDE_PATH="$BUILD_DIR/.heroku/apt/usr/include:$BUILD_DIR/.heroku/apt/usr/include/x86_64-linux-gnu:$INCLUDE_PATH"
 export CPATH="$INCLUDE_PATH"
 export CPPPATH="$INCLUDE_PATH"
-export PKG_CONFIG_PATH="$BUILD_DIR/.apt/usr/lib/x86_64-linux-gnu/pkgconfig:$BUILD_DIR/.apt/usr/lib/i386-linux-gnu/pkgconfig:$BUILD_DIR/.apt/usr/lib/pkgconfig:$PKG_CONFIG_PATH"
+export PKG_CONFIG_PATH="$BUILD_DIR/.heroku/apt/usr/lib/x86_64-linux-gnu/pkgconfig:$BUILD_DIR/.heroku/apt/usr/lib/i386-linux-gnu/pkgconfig:$BUILD_DIR/.heroku/apt/usr/lib/pkgconfig:$PKG_CONFIG_PATH"
 
 #give environment to later buildpacks
 export | grep -E -e ' (PATH|LD_LIBRARY_PATH|LIBRARY_PATH|INCLUDE_PATH|CPATH|CPPPATH|PKG_CONFIG_PATH)='  > "$LP_DIR/export"
 
 topic "Rewrite package-config files"
-find $BUILD_DIR/.apt -type f -ipath '*/pkgconfig/*.pc' | xargs --no-run-if-empty -n 1 sed -i -e 's!^prefix=\(.*\)$!prefix='"$BUILD_DIR"'/.apt\1!g'
+find $BUILD_DIR/.heroku/apt -type f -ipath '*/pkgconfig/*.pc' | xargs --no-run-if-empty -n 1 sed -i -e 's!^prefix=\(.*\)$!prefix='"$BUILD_DIR"'/.heroku/apt\1!g'

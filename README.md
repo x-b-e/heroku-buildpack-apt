@@ -36,12 +36,29 @@ heroku buildpacks:add --index 1 https://github.com/heroku/heroku-buildpack-apt
 
     # you can list packages
     libexample-dev
-    
+
     # or include links to specific .deb files
     https://downloads.example.com/example.deb
-    
+
     # or add custom apt repos (only required if using packages outside of the standard Ubuntu APT repositories)
     :repo:deb https://apt.example.com/ example-distro main
+    # or add GPG signing keys
+    :key:confluent:http://packages.confluent.io/deb/5.5/archive.key
+
+#### Gemfile
+
+    source "https://rubygems.org"
+    gem "pg"
+
+### Check out the PG library version
+
+    $ heroku run bash -a apt-pg-test
+    ~ $ irb
+    irb(main):001:0> require "pg"
+    => true
+    irb(main):002:0> PG::version_string
+    => "PG 0.15.1"
+>>>>>>> 5e3114ec9cb62d84f168b5333c866a7f77540f03
 
 ## License
 
