@@ -1,0 +1,2 @@
+:key:tailscale:https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg
+:repo:deb https://pkgs.tailscale.com/stable/ubuntu jammy main

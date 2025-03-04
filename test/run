@@ -155,6 +155,38 @@ testReportCustomRepositoryNoPackages() {
   assertCapturedSuccess
 }
 
+testCompileCustomKey() {
+  declare -A ubuntu_release_names=(
+    # [heroku-20]="focal"
+    [heroku-22]="jammy"
+    # [heroku-24]="noble"
+  )
+  compile "custom-repository-key-$STACK"
+  assertCaptured "Adding custom repositories"
+  assertCaptured "Adding custom key for tailscale"
+  assertCaptured "Updating APT package index"
+  assertCaptured "https://pkgs.tailscale.com/stable/ubuntu ${ubuntu_release_names[$STACK]}/main amd64 Packages"
+  assertCaptured "Fetching .debs for tailscale"
+  assertCaptured "Installing tailscale"
+  assertCaptured "Writing profile script"
+  assertCaptured "Rewrite package-config files"
+  assertCapturedSuccess
+}
+
+testReportCustomRepositoryKey() {
+  declare -A ubuntu_release_names=(
+      # [heroku-20]="focal"
+      [heroku-22]="jammy"
+      # [heroku-24]="noble"
+    )
+  report "custom-repository-key-$STACK"
+  assertCaptured "packages: \"tailscale\""
+  assertCaptured "packages: \"tailscaled\""
+  assertNotCaptured "custom_packages"
+  assertCaptured "custom_repositories: \"deb https://pkgs.tailscale.com/stable/ubuntu ${ubuntu_release_names[$STACK]} main\""
+  assertCapturedSuccess
+}
+
 pushd "$(dirname 0)" >/dev/null || exit 1
 popd >/dev/null || exit 1
 

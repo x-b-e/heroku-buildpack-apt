@@ -36,12 +36,15 @@ heroku buildpacks:add --index 1 https://github.com/heroku/heroku-buildpack-apt
 
     # you can list packages
     libexample-dev
-    
+
     # or include links to specific .deb files
     https://downloads.example.com/example.deb
-    
+
     # or add custom apt repos (only required if using packages outside of the standard Ubuntu APT repositories)
     :repo:deb https://apt.example.com/ example-distro main
+
+    # or add GPG signing keys
+    :key:confluent:http://packages.confluent.io/deb/5.5/archive.key
 
 ## License
 
